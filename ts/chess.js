@@ -33,13 +33,14 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
 };
-var randomIdGenerator = function () { return Math.random().toString(36).substring(2, length + 2); };
+var randomIdGenerator = function () { return Math.random().toString(36).substring(2, 8); };
 var Chessboard = /** @class */ (function () {
     function Chessboard(xbyx, pieces) {
         var _this = this;
         this.xbyx = xbyx;
         this.pieces = pieces;
         this.turn = "white";
+        this.movesLog = [];
         this.board = Array.from({ length: this.xbyx }, function () { return Array(_this.xbyx).fill(null); });
         this.pieces.forEach(function (piece) {
             _this.setPositionOnBoard(piece.position, piece.id);
@@ -73,6 +74,8 @@ var Chessboard = /** @class */ (function () {
             this.setPositionOnBoard(pieceSelected.position, null);
             pieceSelected.position = newPos;
             this.setPositionOnBoard(pieceSelected.position, pieceSelected.id);
+            // Changes team
+            this.turn = this.turn === "white" ? "black" : "white";
             // Log move
             this.movesLog.push("".concat(pieceSelected.name).concat(this.asAlgebraicNotation(newPos)));
         }
@@ -81,7 +84,7 @@ var Chessboard = /** @class */ (function () {
         var capturePiece = this.getPieceById(pieceId);
         if (!capturePiece)
             return;
-        capturePiece.isCaptured = false;
+        capturePiece.isCaptured = true;
     };
     Chessboard.prototype.asAlgebraicNotation = function (pos) {
         var chars = "abcdefghijklmnop";
@@ -107,20 +110,28 @@ var ChessboardHTML = /** @class */ (function (_super) {
         }
         ;
         _this.chessboardDiv = checkDiv;
-        _this.displayBoard();
-        _this.displayPieces();
+        _this.updateState();
         return _this;
     }
     ChessboardHTML.prototype.displayBoard = function () {
+        var _this = this;
         if (!this.chessboardDiv)
             return;
+        this.chessboardDiv.innerHTML = "";
+        var availableMoves = this.selectedPieceAvailableMoves();
+        console.log(availableMoves, this.selectedPieceId);
         var _loop_1 = function (row) {
             var _loop_2 = function (col) {
                 var square = document.createElement("div");
                 square.classList.add("square");
                 square.id = "pos-".concat(row, "-").concat(col);
-                if (this_1.selectedPieceAvailableMoves().some(function (pos) { return pos[0] === row && pos[1] === col; })) {
+                if (availableMoves.some(function (pos) { return pos[0] === row && pos[1] === col; })) {
                     square.classList.add("available");
+                    square.addEventListener('click', function () {
+                        if (!_this.selectedPieceId)
+                            return;
+                        _this.movePiece(_this.selectedPieceId, [row, col]);
+                    });
                 }
                 else if ((row + col) % 2 === 0) {
                     square.classList.add("white");
@@ -140,19 +151,33 @@ var ChessboardHTML = /** @class */ (function (_super) {
         }
     };
     ChessboardHTML.prototype.displayPieces = function () {
-        for (var _i = 0, _a = this.pieces; _i < _a.length; _i++) {
-            var piece = _a[_i];
+        var _this = this;
+        var _loop_3 = function (piece) {
             if (piece.isCaptured)
-                continue;
-            var square = document.getElementById("pos-".concat(piece.position[1], "-").concat(piece.position[0]));
+                return "continue";
+            var square = document.getElementById("pos-".concat(piece.position[0], "-").concat(piece.position[1]));
             if (!square)
-                continue;
+                return "continue";
             var pieceImage = document.createElement("img");
             pieceImage.src = "../assets/".concat(piece.name.toLowerCase(), "_").concat(piece.side, ".png");
             pieceImage.alt = piece.name;
             pieceImage.classList.add("chess-piece");
+            if (this_2.turn === piece.side) {
+                pieceImage.addEventListener('click', function () {
+                    _this.setSelectedPiece(piece.id);
+                });
+            }
             square.appendChild(pieceImage);
+        };
+        var this_2 = this;
+        for (var _i = 0, _a = this.pieces; _i < _a.length; _i++) {
+            var piece = _a[_i];
+            _loop_3(piece);
         }
+    };
+    ChessboardHTML.prototype.updateState = function () {
+        this.displayBoard();
+        this.displayPieces();
     };
     ChessboardHTML.prototype.selectedPieceAvailableMoves = function () {
         if (!this.selectedPieceId)
@@ -160,9 +185,15 @@ var ChessboardHTML = /** @class */ (function (_super) {
         var selPiece = this.getPieceById(this.selectedPieceId);
         return (selPiece === null || selPiece === void 0 ? void 0 : selPiece.getAvailablePositions(this, selPiece.position)) || [];
     };
+    ChessboardHTML.prototype.setSelectedPiece = function (id) {
+        if (!this.getPieceById(id))
+            return;
+        this.selectedPieceId = this.selectedPieceId === id ? null : id;
+        this.updateState();
+    };
     ChessboardHTML.prototype.movePiece = function (pieceId, newPos) {
         _super.prototype.movePiece.call(this, pieceId, newPos);
-        this.displayPieces();
+        this.setSelectedPiece(pieceId);
     };
     return ChessboardHTML;
 }(Chessboard));
@@ -186,11 +217,43 @@ var oppositeTeamPosTaken = function (board, pos) {
         return true;
     return false;
 };
+var withinBoard = function (board, pos) {
+    var x = pos[0], y = pos[1];
+    return x >= 0 && x < board.xbyx && y >= 0 && y < board.xbyx;
+};
 // Pawn
 var pawnPiece = {
     name: "Pawn",
     description: "Moves forward, protecting the team!",
-    getAvailablePositions: function (board, pos) { return [[0, 0]]; }
+    getAvailablePositions: function (board, pos) {
+        var direction = board.turn === "white" ? 1 : -1; // White moves up, Black moves down
+        var startRow = board.turn === "white" ? 1 : board.xbyx - 2;
+        var possibleMoves = [];
+        // Normal move (one step forward)
+        var oneStep = [pos[0], pos[1] + direction];
+        if (!sameTeamPosTaken(board, oneStep) && !oppositeTeamPosTaken(board, oneStep)) {
+            possibleMoves.push(oneStep);
+            // First move has two steps forward
+            if (pos[1] === startRow) {
+                var twoStep = [pos[0], pos[1] + 2 * direction];
+                if (!sameTeamPosTaken(board, twoStep)) {
+                    possibleMoves.push(twoStep);
+                }
+            }
+        }
+        ;
+        // Pawns can capture moves diagonally
+        [
+            [pos[0] - 1, pos[1] + direction],
+            [pos[0] + 1, pos[1] + direction]
+        ].forEach(function (capturePos) {
+            if (withinBoard(board, capturePos) && oppositeTeamPosTaken(board, capturePos)) {
+                possibleMoves.push(capturePos);
+            }
+        });
+        // Ensure all moves stay within board limits
+        return possibleMoves.filter(function (p) { return withinBoard(board, p); });
+    }
 };
 // Knight
 var knightPiece = {
@@ -206,10 +269,7 @@ var knightPiece = {
             var dx = _a[0], dy = _a[1];
             return [pos[0] + dx, pos[1] + dy];
         })
-            .filter(function (_a) {
-            var x = _a[0], y = _a[1];
-            return x >= 0 && x < board.xbyx && y >= 0 && y < board.xbyx;
-        })
+            .filter(function (p) { return withinBoard(board, p); })
             .filter(function (pos) { return !sameTeamPosTaken(board, pos); });
     }
 };
@@ -226,10 +286,7 @@ var kingPiece = {
             var dx = _a[0], dy = _a[1];
             return [pos[0] + dx, pos[1] + dy];
         })
-            .filter(function (_a) {
-            var x = _a[0], y = _a[1];
-            return x >= 0 && x < board.xbyx && y >= 0 && y < board.xbyx;
-        })
+            .filter(function (pos) { return withinBoard(board, pos); })
             .filter(function (pos) { return !sameTeamPosTaken(board, pos); });
     }
 };
@@ -249,7 +306,7 @@ var rookPiece = {
             while (true) {
                 x += dx;
                 y += dy;
-                if (x < 0 || x >= board.xbyx || y < 0 || y >= board.xbyx)
+                if (!withinBoard(board, [x, y]))
                     break;
                 var newPos = [x, y];
                 if (sameTeamPosTaken(board, newPos))
@@ -278,7 +335,7 @@ var bishopPiece = {
             while (true) {
                 x += dx;
                 y += dy;
-                if (x < 0 || x >= board.xbyx || y < 0 || y >= board.xbyx)
+                if (!withinBoard(board, [x, y]))
                     break;
                 var newPos = [x, y];
                 if (sameTeamPosTaken(board, newPos))

@@ -17,12 +17,12 @@ type ChessPieceOnPlay = ChessPieceType & {
     isCaptured: boolean;
 }
 
-const randomIdGenerator = () => Math.random().toString(36).substring(2, length + 2);
+const randomIdGenerator = () => Math.random().toString(36).substring(2, 8);
 
 class Chessboard {
     public board: Board;
     public turn: TeamSide = "white";
-    public movesLog: string[];
+    public movesLog: string[] = [];
 
     constructor(
         public xbyx: AvailableChessboardSizes,
@@ -68,6 +68,9 @@ class Chessboard {
             pieceSelected.position = newPos;
             this.setPositionOnBoard(pieceSelected.position, pieceSelected.id);
 
+            // Changes team
+            this.turn = this.turn === "white" ? "black" : "white";
+
             // Log move
             this.movesLog.push(`${pieceSelected.name}${this.asAlgebraicNotation(newPos)}`);
         }
@@ -77,7 +80,7 @@ class Chessboard {
         const capturePiece = this.getPieceById(pieceId);
         if (!capturePiece) return;
 
-        capturePiece.isCaptured = false;
+        capturePiece.isCaptured = true;
     }
 
     asAlgebraicNotation(pos: Position): string {
@@ -109,20 +112,27 @@ class ChessboardHTML extends Chessboard {
         };
         this.chessboardDiv = checkDiv;
 
-        this.displayBoard();
-        this.displayPieces();
+        this.updateState();
     }
 
     displayBoard() {
         if (!this.chessboardDiv) return;
+        this.chessboardDiv.innerHTML = "";
+
+        const availableMoves = this.selectedPieceAvailableMoves();
+        console.log(availableMoves, this.selectedPieceId);
 
         for (let row = 7; row >= 0; row--) { // Rows reversed to ensure left-to-right & bottom-to-top grid display.
             for (let col = 0; col < 8; col++) {  
                 const square = document.createElement("div");
                 square.classList.add("square");
                 square.id = `pos-${row}-${col}`;
-                if (this.selectedPieceAvailableMoves().some(pos => pos[0] === row && pos[1] === col)) {
+                if (availableMoves.some(pos => pos[0] === row && pos[1] === col)) {
                     square.classList.add("available");
+                    square.addEventListener('click', () => {
+                        if (!this.selectedPieceId) return;
+                        this.movePiece(this.selectedPieceId, [row, col]);
+                    })
                 } else if ((row + col) % 2 === 0) {
                     square.classList.add("white");
                 } else {
@@ -137,7 +147,7 @@ class ChessboardHTML extends Chessboard {
         for (const piece of this.pieces) {
             if (piece.isCaptured) continue;
 
-            const square = document.getElementById(`pos-${piece.position[1]}-${piece.position[0]}`);
+            const square = document.getElementById(`pos-${piece.position[0]}-${piece.position[1]}`);
             if (!square) continue;
 
             const pieceImage = document.createElement("img");
@@ -145,9 +155,20 @@ class ChessboardHTML extends Chessboard {
             pieceImage.alt = piece.name;
             pieceImage.classList.add("chess-piece");
 
+            if (this.turn === piece.side) {
+                pieceImage.addEventListener('click', () => {
+                    this.setSelectedPiece(piece.id);
+                })
+            }
+
             square.appendChild(pieceImage);
         }
 
+    }
+
+    updateState() {
+        this.displayBoard();
+        this.displayPieces();
     }
 
     selectedPieceAvailableMoves() {
@@ -157,9 +178,15 @@ class ChessboardHTML extends Chessboard {
         return selPiece?.getAvailablePositions(this, selPiece.position) || [];
     }
 
+    setSelectedPiece(id: string) {
+        if (!this.getPieceById(id)) return;
+        this.selectedPieceId = this.selectedPieceId === id ? null : id;
+        this.updateState();
+    }
+
     movePiece(pieceId: string, newPos: Position): void {
         super.movePiece(pieceId, newPos);
-        this.displayPieces();
+        this.setSelectedPiece(pieceId);
     }
 }
 
@@ -185,12 +212,47 @@ const oppositeTeamPosTaken = (board: Chessboard, pos: Position) => {
     return false
 }
 
+const withinBoard = (board: Chessboard, pos: Position) => {
+    let [x, y] = pos;
+    return x >= 0 && x < board.xbyx && y >= 0 && y < board.xbyx;
+}
 
 // Pawn
 const pawnPiece: ChessPieceType = {
     name: "Pawn",
     description: "Moves forward, protecting the team!",
-    getAvailablePositions: (board: Chessboard, pos: Position) => [[0, 0]]
+    getAvailablePositions: (board: Chessboard, pos: Position) => {
+        const direction = board.turn === "white" ? 1 : -1; // White moves up, Black moves down
+        const startRow = board.turn === "white" ? 1 : board.xbyx - 2;
+        const possibleMoves: Position[] = [];
+
+        // Normal move (one step forward)
+        const oneStep: Position = [pos[0], pos[1] + direction];
+        if (!sameTeamPosTaken(board, oneStep) && !oppositeTeamPosTaken(board, oneStep)) {
+            possibleMoves.push(oneStep);
+        
+            // First move has two steps forward
+            if (pos[1] === startRow) {
+                const twoStep: Position = [pos[0], pos[1] + 2 * direction];
+                if (!sameTeamPosTaken(board, twoStep)) {
+                    possibleMoves.push(twoStep);
+                }
+            }
+        };
+
+        // Pawns can capture moves diagonally
+        [
+            [pos[0] - 1, pos[1] + direction] as Position, 
+            [pos[0] + 1, pos[1] + direction] as Position
+        ].forEach(capturePos => {
+            if (withinBoard(board, capturePos) && oppositeTeamPosTaken(board, capturePos)) {
+                possibleMoves.push(capturePos);
+            }
+        })
+
+        // Ensure all moves stay within board limits
+        return possibleMoves.filter((p) => withinBoard(board, p));
+    }
 }
 
 // Knight
@@ -205,7 +267,7 @@ const knightPiece: ChessPieceType = {
 
         return knightMoves
             .map(([dx, dy]) => [pos[0] + dx, pos[1] + dy] as Position)
-            .filter(([x, y]) => x >= 0 && x < board.xbyx && y >= 0 && y < board.xbyx)
+            .filter(p => withinBoard(board, p))
             .filter((pos) => !sameTeamPosTaken(board, pos))
     }
 }
@@ -221,7 +283,7 @@ const kingPiece: ChessPieceType = {
         ]
 
         return kingMovesAvailable.map(([dx, dy]) => [pos[0] + dx, pos[1] + dy] as Position)
-            .filter(([x, y]) => x >= 0 && x < board.xbyx && y >= 0 && y < board.xbyx)
+            .filter(pos => withinBoard(board, pos))
             .filter((pos) => !sameTeamPosTaken(board, pos))
     }
 }
@@ -244,7 +306,7 @@ const rookPiece: ChessPieceType = {
             while (true) {
                 x += dx;
                 y += dy;
-                if (x < 0 || x >= board.xbyx || y < 0 || y >= board.xbyx) break;
+                if (!withinBoard(board, [x, y])) break;
 
                 let newPos: Position = [x, y];
 
@@ -276,7 +338,7 @@ const bishopPiece: ChessPieceType = {
             while (true) {
                 x += dx;
                 y += dy;
-                if (x < 0 || x >= board.xbyx || y < 0 || y >= board.xbyx) break;
+                if (!withinBoard(board, [x, y])) break;
 
                 let newPos: Position = [x, y];
 
