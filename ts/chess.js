@@ -1,3 +1,4 @@
+// Everything is contained here to maintain a balance
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
@@ -33,6 +34,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
 };
+// Classes
 var randomIdGenerator = function () { return Math.random().toString(36).substring(2, 8); };
 var Chessboard = /** @class */ (function () {
     function Chessboard(xbyx, pieces) {
@@ -77,8 +79,9 @@ var Chessboard = /** @class */ (function () {
             // Changes team
             this.turn = this.turn === "white" ? "black" : "white";
             // Log move
-            this.movesLog.push("".concat(pieceSelected.name).concat(this.asAlgebraicNotation(newPos)));
+            this.movesLog.push("".concat(pieceSelected.name, "-").concat(this.asAlgebraicNotation(newPos)));
         }
+        console.log(this.movesLog);
     };
     Chessboard.prototype.capturePiece = function (pieceId) {
         var capturePiece = this.getPieceById(pieceId);
@@ -96,10 +99,11 @@ var Chessboard = /** @class */ (function () {
     };
     return Chessboard;
 }());
+// Mounds the Chessboard logic onto an HTML Template
 var ChessboardHTML = /** @class */ (function (_super) {
     __extends(ChessboardHTML, _super);
     function ChessboardHTML(xbyx, pieces, elmId) {
-        if (elmId === void 0) { elmId = "chessboard"; }
+        if (elmId === void 0) { elmId = "chessboardContainer"; }
         var _this = _super.call(this, xbyx, pieces) || this;
         _this.xbyx = xbyx;
         _this.pieces = pieces;
@@ -109,17 +113,18 @@ var ChessboardHTML = /** @class */ (function (_super) {
             return _this;
         }
         ;
-        _this.chessboardDiv = checkDiv;
+        _this.chessboardContainerDiv = checkDiv;
         _this.updateState();
         return _this;
     }
     ChessboardHTML.prototype.displayBoard = function () {
         var _this = this;
-        if (!this.chessboardDiv)
+        if (!this.chessboardContainerDiv)
             return;
-        this.chessboardDiv.innerHTML = "";
+        this.chessboardContainerDiv.innerHTML = "";
+        var chessboardDiv = document.createElement('div');
+        chessboardDiv.id = "chessboard";
         var availableMoves = this.selectedPieceAvailableMoves();
-        console.log(availableMoves, this.selectedPieceId);
         var _loop_1 = function (row) {
             var _loop_2 = function (col) {
                 var square = document.createElement("div");
@@ -139,16 +144,16 @@ var ChessboardHTML = /** @class */ (function (_super) {
                 else {
                     square.classList.add("black");
                 }
-                this_1.chessboardDiv.appendChild(square);
+                chessboardDiv.appendChild(square);
             };
             for (var col = 0; col < 8; col++) {
                 _loop_2(col);
             }
         };
-        var this_1 = this;
         for (var row = 7; row >= 0; row--) {
             _loop_1(row);
         }
+        this.chessboardContainerDiv.appendChild(chessboardDiv);
     };
     ChessboardHTML.prototype.displayPieces = function () {
         var _this = this;
@@ -162,14 +167,14 @@ var ChessboardHTML = /** @class */ (function (_super) {
             pieceImage.src = "../assets/".concat(piece.name.toLowerCase(), "_").concat(piece.side, ".png");
             pieceImage.alt = piece.name;
             pieceImage.classList.add("chess-piece");
-            if (this_2.turn === piece.side) {
+            if (this_1.turn === piece.side) {
                 pieceImage.addEventListener('click', function () {
                     _this.setSelectedPiece(piece.id);
                 });
             }
             square.appendChild(pieceImage);
         };
-        var this_2 = this;
+        var this_1 = this;
         for (var _i = 0, _a = this.pieces; _i < _a.length; _i++) {
             var piece = _a[_i];
             _loop_3(piece);
@@ -229,20 +234,19 @@ var pawnPiece = {
         var direction = board.turn === "white" ? 1 : -1; // White moves up, Black moves down
         var startRow = board.turn === "white" ? 1 : board.xbyx - 2;
         var possibleMoves = [];
-        // Normal move (one step forward)
         var oneStep = [pos[0], pos[1] + direction];
         if (!sameTeamPosTaken(board, oneStep) && !oppositeTeamPosTaken(board, oneStep)) {
             possibleMoves.push(oneStep);
             // First move has two steps forward
             if (pos[1] === startRow) {
                 var twoStep = [pos[0], pos[1] + 2 * direction];
-                if (!sameTeamPosTaken(board, twoStep)) {
+                if (!sameTeamPosTaken(board, twoStep) && !oppositeTeamPosTaken(board, twoStep)) {
                     possibleMoves.push(twoStep);
                 }
             }
         }
         ;
-        // Pawns can capture moves diagonally
+        // Pawns can capture pieces diagonally
         [
             [pos[0] - 1, pos[1] + direction],
             [pos[0] + 1, pos[1] + direction]
@@ -399,7 +403,39 @@ var setUpClassicGame = function () {
     }
     return pieceLayout;
 };
+var App = /** @class */ (function () {
+    function App() {
+        this.gameModeSelectionDiv = document.getElementById("gameModeSelection");
+        this.gameModes = [
+            {
+                name: "Classic",
+                description: "The standard, most classic way of playing Chess!",
+                setUp: setUpClassicGame
+            }
+        ];
+        this.displayUI();
+    }
+    App.prototype.displayUI = function () {
+        var _this = this;
+        this.gameModes.forEach(function (mode) {
+            var button = document.createElement("button");
+            button.innerText = mode.name;
+            button.title = mode.description;
+            button.addEventListener("click", function () {
+                if (!_this.gameModeSelectionDiv)
+                    return;
+                var piecesSetUp = mode.setUp();
+                new ChessboardHTML(8, piecesSetUp, "chessboardContainer");
+                _this.gameModeSelectionDiv.innerHTML = "";
+            });
+            if (!_this.gameModeSelectionDiv)
+                return;
+            _this.gameModeSelectionDiv.appendChild(button);
+        });
+    };
+    return App;
+}());
+// Finally! Run items in HTML
 document.addEventListener("DOMContentLoaded", function () {
-    var classicGame = setUpClassicGame();
-    new ChessboardHTML(8, classicGame, "chessboard");
+    new App();
 });

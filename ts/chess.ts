@@ -1,3 +1,5 @@
+// Everything is contained here to maintain a balance
+
 type AvailableChessboardSizes = 8 | 10 | 12
 type TeamSide = "white" | "black"
 type Position = [number, number]
@@ -17,6 +19,7 @@ type ChessPieceOnPlay = ChessPieceType & {
     isCaptured: boolean;
 }
 
+// Classes
 const randomIdGenerator = () => Math.random().toString(36).substring(2, 8);
 
 class Chessboard {
@@ -72,8 +75,10 @@ class Chessboard {
             this.turn = this.turn === "white" ? "black" : "white";
 
             // Log move
-            this.movesLog.push(`${pieceSelected.name}${this.asAlgebraicNotation(newPos)}`);
+            this.movesLog.push(`${pieceSelected.name}-${this.asAlgebraicNotation(newPos)}`);
         }
+
+        console.log(this.movesLog);
     }
 
     capturePiece(pieceId: string) {
@@ -95,14 +100,15 @@ class Chessboard {
 }
 
 
+// Mounds the Chessboard logic onto an HTML Template
 class ChessboardHTML extends Chessboard {
-    private chessboardDiv: HTMLElement;
+    private chessboardContainerDiv: HTMLElement;
     private selectedPieceId: string | null;
 
     constructor(
         public xbyx: AvailableChessboardSizes,
         public pieces: ChessPieceOnPlay[],
-        elmId: string = "chessboard"
+        elmId: string = "chessboardContainer"
     ) {
         super(xbyx, pieces);
         let checkDiv = document.getElementById(elmId);
@@ -110,17 +116,19 @@ class ChessboardHTML extends Chessboard {
             console.error(`Div with id '${elmId}' doesn't exist`);
             return;
         };
-        this.chessboardDiv = checkDiv;
+        this.chessboardContainerDiv = checkDiv;
 
         this.updateState();
     }
 
     displayBoard() {
-        if (!this.chessboardDiv) return;
-        this.chessboardDiv.innerHTML = "";
+        if (!this.chessboardContainerDiv) return;
+        this.chessboardContainerDiv.innerHTML = "";
+
+        let chessboardDiv = document.createElement('div');
+        chessboardDiv.id = "chessboard";
 
         const availableMoves = this.selectedPieceAvailableMoves();
-        console.log(availableMoves, this.selectedPieceId);
 
         for (let row = 7; row >= 0; row--) { // Rows reversed to ensure left-to-right & bottom-to-top grid display.
             for (let col = 0; col < 8; col++) {  
@@ -138,9 +146,11 @@ class ChessboardHTML extends Chessboard {
                 } else {
                     square.classList.add("black");
                 }
-                this.chessboardDiv.appendChild(square);
+                chessboardDiv.appendChild(square);
             }
         }
+
+        this.chessboardContainerDiv.appendChild(chessboardDiv);
     }
 
     displayPieces() {
@@ -190,10 +200,10 @@ class ChessboardHTML extends Chessboard {
     }
 }
 
+
 // Pieces
 
 //Built-In Utilities
-
 const sameTeamPosTaken = (board: Chessboard, pos: Position) => {
     const loc = board.peekBoardPosition(pos);
     if (!loc) return false;
@@ -224,9 +234,8 @@ const pawnPiece: ChessPieceType = {
     getAvailablePositions: (board: Chessboard, pos: Position) => {
         const direction = board.turn === "white" ? 1 : -1; // White moves up, Black moves down
         const startRow = board.turn === "white" ? 1 : board.xbyx - 2;
-        const possibleMoves: Position[] = [];
+        let possibleMoves: Position[] = [];
 
-        // Normal move (one step forward)
         const oneStep: Position = [pos[0], pos[1] + direction];
         if (!sameTeamPosTaken(board, oneStep) && !oppositeTeamPosTaken(board, oneStep)) {
             possibleMoves.push(oneStep);
@@ -234,13 +243,13 @@ const pawnPiece: ChessPieceType = {
             // First move has two steps forward
             if (pos[1] === startRow) {
                 const twoStep: Position = [pos[0], pos[1] + 2 * direction];
-                if (!sameTeamPosTaken(board, twoStep)) {
+                if (!sameTeamPosTaken(board, twoStep) && !oppositeTeamPosTaken(board, twoStep)) {
                     possibleMoves.push(twoStep);
                 }
             }
         };
 
-        // Pawns can capture moves diagonally
+        // Pawns can capture pieces diagonally
         [
             [pos[0] - 1, pos[1] + direction] as Position, 
             [pos[0] + 1, pos[1] + direction] as Position
@@ -420,7 +429,47 @@ const setUpClassicGame = () => {
     return pieceLayout;
 }
 
+
+// Now let's build the entire App!
+type GameModeSelection = {
+    name: string,
+    description: string,
+    setUp: () => ChessPieceOnPlay[]
+}
+class App {
+    private gameModeSelectionDiv: HTMLElement | null = document.getElementById("gameModeSelection");
+    private gameModes: GameModeSelection[] = [
+        {
+            name: "Classic",
+            description: "The standard, most classic way of playing Chess!",
+            setUp: setUpClassicGame
+        }
+    ]
+
+    constructor() {
+        this.displayUI();
+    }
+
+    displayUI() {
+        this.gameModes.forEach((mode) => {
+            const button = document.createElement("button");
+            button.innerText = mode.name;
+            button.title = mode.description;
+            button.addEventListener("click", () => {
+                if (!this.gameModeSelectionDiv) return;
+                const piecesSetUp = mode.setUp();
+                new ChessboardHTML(8, piecesSetUp, "chessboardContainer");
+                this.gameModeSelectionDiv.innerHTML = "";
+            });
+
+            if (!this.gameModeSelectionDiv) return;
+            this.gameModeSelectionDiv.appendChild(button);
+        });
+    }
+}
+
+
+// Finally! Run items in HTML
 document.addEventListener("DOMContentLoaded", () => {
-    const classicGame = setUpClassicGame();
-    new ChessboardHTML(8, classicGame, "chessboard");
+    new App();
 });
