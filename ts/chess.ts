@@ -1,5 +1,7 @@
-// Everything is contained here to maintain a balance
+// Everything is contained here!
+// In a larger-scale project, I'd definitely modularize my project into folders!
 
+// Types
 type AvailableChessboardSizes = 8 | 10 | 12
 type TeamSide = "white" | "black"
 type Position = [number, number]
@@ -19,9 +21,12 @@ type ChessPieceOnPlay = ChessPieceType & {
     isCaptured: boolean;
 }
 
-// Classes
+
+// Utilities
 const randomIdGenerator = () => Math.random().toString(36).substring(2, 8);
 
+
+// Classes
 class Chessboard {
     public board: Board;
     public turn: TeamSide = "white";
@@ -46,6 +51,20 @@ class Chessboard {
         this.turn = this.turn === "white" ? "black" : "white";
     }
 
+    private blindMove(piece: ChessPieceOnPlay, newPos: Position, logMove: boolean = false) {
+        this.setPositionOnBoard(piece.position, null);
+        piece.position = newPos;
+        this.setPositionOnBoard(piece.position, piece.id);
+
+        // Log Piece
+        if (logMove) this.movesLog.push(`${piece.name}-${this.asAlgebraicNotation(newPos)}`);
+    }
+
+    getSideMoves() {
+        const counter = this.turn === "white" ? 0 : 1;
+        return this.movesLog.filter((_, index) => index % 2 === counter);
+    }
+
     getPieceById(pieceId: string): ChessPieceOnPlay | undefined {
         return this.pieces.find(piece => piece.id === pieceId);
     }
@@ -56,8 +75,7 @@ class Chessboard {
 
     movePiece(pieceId: string, newPos: Position) {
         // Get Piece form board
-        const pieceSelected = this.getPieceById(pieceId);
-        if (!pieceSelected) return;
+        const pieceSelected = this.getPieceById(pieceId); if (!pieceSelected) return;
 
         // Check if move is legal
         const availableMoves = pieceSelected.getAvailablePositions(this, pieceSelected.position);
@@ -66,25 +84,38 @@ class Chessboard {
             const pieceCapturedId = this.peekBoardPosition(newPos);
             if (pieceCapturedId) this.capturePiece(pieceCapturedId);
 
+            // For cases of castling
+            if (
+                pieceSelected.name === "King"
+                && Math.abs(newPos[0] - pieceSelected.position[0]) > 1
+            ) {
+                const kingRow = pieceSelected.position[1];
+                const isKingside = newPos[0] > pieceSelected.position[0];
+                const rookStartCol = isKingside ? this.xbyx - 1 : 0;
+                const rookNewCol = isKingside
+                    ? newPos[0] - 1
+                    : newPos[0] + 1;
+
+                const rookId = this.peekBoardPosition([rookStartCol, kingRow]); if (!rookId) return;
+                const rook = this.getPieceById(rookId); if (!rook || rook.name !== "Rook") return;
+
+                // Moves the Rook
+                this.blindMove(rook, [rookNewCol, kingRow])
+
+                // Log castling move
+                this.movesLog.push(isKingside ? "O-O" : "O-O-O");
+            }
+
             // Swaps positions on the board
-            this.setPositionOnBoard(pieceSelected.position, null);
-            pieceSelected.position = newPos;
-            this.setPositionOnBoard(pieceSelected.position, pieceSelected.id);
+            this.blindMove(pieceSelected, newPos, true);
 
             // Changes team
-            this.turn = this.turn === "white" ? "black" : "white";
-
-            // Log move
-            this.movesLog.push(`${pieceSelected.name}-${this.asAlgebraicNotation(newPos)}`);
+            this.changeTurn();
         }
-
-        console.log(this.movesLog);
     }
 
     capturePiece(pieceId: string) {
-        const capturePiece = this.getPieceById(pieceId);
-        if (!capturePiece) return;
-
+        const capturePiece = this.getPieceById(pieceId); if (!capturePiece) return;
         capturePiece.isCaptured = true;
     }
 
@@ -100,7 +131,7 @@ class Chessboard {
 }
 
 
-// Mounds the Chessboard logic onto an HTML Template
+    // Mounds the Chessboard logic onto an HTML Template
 class ChessboardHTML extends Chessboard {
     private chessboardContainerDiv: HTMLElement;
     private selectedPieceId: string | null;
@@ -130,8 +161,8 @@ class ChessboardHTML extends Chessboard {
 
         const availableMoves = this.selectedPieceAvailableMoves();
 
-        for (let row = 7; row >= 0; row--) { // Rows reversed to ensure left-to-right & bottom-to-top grid display.
-            for (let col = 0; col < 8; col++) {  
+        for (let col = this.xbyx - 1; col >= 0; col--) {
+            for (let row = 0; row < this.xbyx; row++) {  
                 const square = document.createElement("div");
                 square.classList.add("square");
                 square.id = `pos-${row}-${col}`;
@@ -227,6 +258,10 @@ const withinBoard = (board: Chessboard, pos: Position) => {
     return x >= 0 && x < board.xbyx && y >= 0 && y < board.xbyx;
 }
 
+const pieceHasMoved = (board: Chessboard, piece: ChessPieceOnPlay) => {
+    return board.getSideMoves().some(move => move.includes(piece.name));
+}
+
 // Pawn
 const pawnPiece: ChessPieceType = {
     name: "Pawn",
@@ -291,9 +326,44 @@ const kingPiece: ChessPieceType = {
             [-1, 0], [-1, -1], [0, -1], [1, -1]
         ]
 
-        return kingMovesAvailable.map(([dx, dy]) => [pos[0] + dx, pos[1] + dy] as Position)
+        let possibleMoves = kingMovesAvailable
+            .map(([dx, dy]) => [pos[0] + dx, pos[1] + dy] as Position)
             .filter(pos => withinBoard(board, pos))
-            .filter((pos) => !sameTeamPosTaken(board, pos))
+            .filter((pos) => !sameTeamPosTaken(board, pos));
+        
+        // Add castling moves
+        const kingId = board.peekBoardPosition(pos); if (!kingId) return possibleMoves;
+        const kingPiece = board.getPieceById(kingId); if (!kingPiece) return possibleMoves;
+        if (pieceHasMoved(board, kingPiece)) return possibleMoves; // Returns moves if King hasn't moved
+
+        const team = kingPiece.side;
+        const col = pos[1];
+
+        const tryCastle = (rookRow: number, pathRows: number[], targetRow: number) => {
+            const rookId = board.peekBoardPosition([rookRow, col]); if (!rookId) return;
+            const rook = board.getPieceById(rookId);
+            if (
+                !rook
+                || rook.name !== "Rook"
+                || rook.side !== team
+                || pieceHasMoved(board, rook)
+            ) return;
+
+            // Checks if all spaces between King and Rook are empty
+            for (const row of pathRows) {
+                if (!!board.peekBoardPosition([row, col])) return;
+            }
+
+            possibleMoves.push([targetRow, col]);
+        };
+
+        // Kingside castling
+        tryCastle(7, [4, 5, 6], 5);
+
+        // Queenside castling
+        tryCastle(0, [1, 2], 1);
+        
+        return possibleMoves;
     }
 }
 
@@ -379,6 +449,7 @@ const chessPieces: ChessPieceType[] = [
     queenPiece, kingPiece,
 ]
 
+// Games available
 const setUpClassicGame = () => {
     const positionMap = {
         "Pawn": Array.from({ length: 8 }, (_, i) => [i, 1]),
@@ -436,6 +507,10 @@ type GameModeSelection = {
     description: string,
     setUp: () => ChessPieceOnPlay[]
 }
+type OpponentSelection = {
+    name: string,
+    setUp: () => void;
+}
 class App {
     private gameModeSelectionDiv: HTMLElement | null = document.getElementById("gameModeSelection");
     private gameModes: GameModeSelection[] = [
@@ -443,6 +518,16 @@ class App {
             name: "Classic",
             description: "The standard, most classic way of playing Chess!",
             setUp: setUpClassicGame
+        }
+    ]
+    private opponents: OpponentSelection[] = [
+        {
+            name: "AI",
+            setUp: () => {}
+        },
+        {
+            name: "Multiplayer",
+            setUp: () => {}
         }
     ]
 
@@ -455,6 +540,7 @@ class App {
             const button = document.createElement("button");
             button.innerText = mode.name;
             button.title = mode.description;
+
             button.addEventListener("click", () => {
                 if (!this.gameModeSelectionDiv) return;
                 const piecesSetUp = mode.setUp();
@@ -469,7 +555,7 @@ class App {
 }
 
 
-// Finally! Run items in HTML
+// Finally! Time to run the app!
 document.addEventListener("DOMContentLoaded", () => {
     new App();
 });

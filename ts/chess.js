@@ -54,6 +54,19 @@ var Chessboard = /** @class */ (function () {
     Chessboard.prototype.changeTurn = function () {
         this.turn = this.turn === "white" ? "black" : "white";
     };
+    Chessboard.prototype.blindMove = function (piece, newPos, logMove) {
+        if (logMove === void 0) { logMove = false; }
+        this.setPositionOnBoard(piece.position, null);
+        piece.position = newPos;
+        this.setPositionOnBoard(piece.position, piece.id);
+        // Log Piece
+        if (logMove)
+            this.movesLog.push("".concat(piece.name, "-").concat(this.asAlgebraicNotation(newPos)));
+    };
+    Chessboard.prototype.getSideMoves = function () {
+        var counter = this.turn === "white" ? 0 : 1;
+        return this.movesLog.filter(function (_, index) { return index % 2 === counter; });
+    };
     Chessboard.prototype.getPieceById = function (pieceId) {
         return this.pieces.find(function (piece) { return piece.id === pieceId; });
     };
@@ -72,16 +85,31 @@ var Chessboard = /** @class */ (function () {
             var pieceCapturedId = this.peekBoardPosition(newPos);
             if (pieceCapturedId)
                 this.capturePiece(pieceCapturedId);
+            // For cases of castling
+            if (pieceSelected.name === "King"
+                && Math.abs(newPos[0] - pieceSelected.position[0]) > 1) {
+                var kingRow = pieceSelected.position[1];
+                var isKingside = newPos[0] > pieceSelected.position[0];
+                var rookStartCol = isKingside ? 7 : 0;
+                var rookNewCol = isKingside
+                    ? newPos[0] - 1
+                    : newPos[0] + 1;
+                var rookId = this.peekBoardPosition([rookStartCol, kingRow]);
+                if (!rookId)
+                    return;
+                var rook = this.getPieceById(rookId);
+                if (!rook || rook.name !== "Rook")
+                    return;
+                // Moves the Rook
+                this.blindMove(rook, [rookNewCol, kingRow]);
+                // Log castling move
+                this.movesLog.push(isKingside ? "O-O" : "O-O-O");
+            }
             // Swaps positions on the board
-            this.setPositionOnBoard(pieceSelected.position, null);
-            pieceSelected.position = newPos;
-            this.setPositionOnBoard(pieceSelected.position, pieceSelected.id);
+            this.blindMove(pieceSelected, newPos, true);
             // Changes team
-            this.turn = this.turn === "white" ? "black" : "white";
-            // Log move
-            this.movesLog.push("".concat(pieceSelected.name, "-").concat(this.asAlgebraicNotation(newPos)));
+            this.changeTurn();
         }
-        console.log(this.movesLog);
     };
     Chessboard.prototype.capturePiece = function (pieceId) {
         var capturePiece = this.getPieceById(pieceId);
@@ -125,8 +153,8 @@ var ChessboardHTML = /** @class */ (function (_super) {
         var chessboardDiv = document.createElement('div');
         chessboardDiv.id = "chessboard";
         var availableMoves = this.selectedPieceAvailableMoves();
-        var _loop_1 = function (row) {
-            var _loop_2 = function (col) {
+        var _loop_1 = function (col) {
+            var _loop_2 = function (row) {
                 var square = document.createElement("div");
                 square.classList.add("square");
                 square.id = "pos-".concat(row, "-").concat(col);
@@ -146,12 +174,13 @@ var ChessboardHTML = /** @class */ (function (_super) {
                 }
                 chessboardDiv.appendChild(square);
             };
-            for (var col = 0; col < 8; col++) {
-                _loop_2(col);
+            for (var row = 0; row < this_1.xbyx; row++) {
+                _loop_2(row);
             }
         };
-        for (var row = 7; row >= 0; row--) {
-            _loop_1(row);
+        var this_1 = this;
+        for (var col = this.xbyx - 1; col >= 0; col--) {
+            _loop_1(col);
         }
         this.chessboardContainerDiv.appendChild(chessboardDiv);
     };
@@ -167,14 +196,14 @@ var ChessboardHTML = /** @class */ (function (_super) {
             pieceImage.src = "../assets/".concat(piece.name.toLowerCase(), "_").concat(piece.side, ".png");
             pieceImage.alt = piece.name;
             pieceImage.classList.add("chess-piece");
-            if (this_1.turn === piece.side) {
+            if (this_2.turn === piece.side) {
                 pieceImage.addEventListener('click', function () {
                     _this.setSelectedPiece(piece.id);
                 });
             }
             square.appendChild(pieceImage);
         };
-        var this_1 = this;
+        var this_2 = this;
         for (var _i = 0, _a = this.pieces; _i < _a.length; _i++) {
             var piece = _a[_i];
             _loop_3(piece);
@@ -225,6 +254,9 @@ var oppositeTeamPosTaken = function (board, pos) {
 var withinBoard = function (board, pos) {
     var x = pos[0], y = pos[1];
     return x >= 0 && x < board.xbyx && y >= 0 && y < board.xbyx;
+};
+var pieceHasMoved = function (board, piece) {
+    return board.getSideMoves().some(function (move) { return move.includes(piece.name); });
 };
 // Pawn
 var pawnPiece = {
@@ -286,12 +318,47 @@ var kingPiece = {
             [1, 0], [1, 1], [0, 1], [-1, 1],
             [-1, 0], [-1, -1], [0, -1], [1, -1]
         ];
-        return kingMovesAvailable.map(function (_a) {
+        var possibleMoves = kingMovesAvailable
+            .map(function (_a) {
             var dx = _a[0], dy = _a[1];
             return [pos[0] + dx, pos[1] + dy];
         })
             .filter(function (pos) { return withinBoard(board, pos); })
             .filter(function (pos) { return !sameTeamPosTaken(board, pos); });
+        // Add castling moves
+        var kingId = board.peekBoardPosition(pos);
+        if (!kingId)
+            return possibleMoves;
+        var kingPiece = board.getPieceById(kingId);
+        if (!kingPiece)
+            return possibleMoves;
+        if (pieceHasMoved(board, kingPiece))
+            return possibleMoves; // Returns moves if King hasn't moved
+        var team = kingPiece.side;
+        var col = pos[1];
+        var tryCastle = function (rookRow, pathRows, targetRow) {
+            var rookId = board.peekBoardPosition([rookRow, col]);
+            if (!rookId)
+                return;
+            var rook = board.getPieceById(rookId);
+            if (!rook
+                || rook.name !== "Rook"
+                || rook.side !== team
+                || pieceHasMoved(board, rook))
+                return;
+            // Checks if all spaces between King and Rook are empty
+            for (var _i = 0, pathRows_1 = pathRows; _i < pathRows_1.length; _i++) {
+                var row = pathRows_1[_i];
+                if (!!board.peekBoardPosition([row, col]))
+                    return;
+            }
+            possibleMoves.push([targetRow, col]);
+        };
+        // Kingside castling
+        tryCastle(7, [4, 5, 6], 5);
+        // Queenside castling
+        tryCastle(0, [1, 2], 1);
+        return possibleMoves;
     }
 };
 // Rook
@@ -367,6 +434,7 @@ var chessPieces = [
     pawnPiece, rookPiece, knightPiece, bishopPiece,
     queenPiece, kingPiece,
 ];
+// Games available
 var setUpClassicGame = function () {
     var positionMap = {
         "Pawn": Array.from({ length: 8 }, function (_, i) { return [i, 1]; }),
@@ -413,6 +481,16 @@ var App = /** @class */ (function () {
                 setUp: setUpClassicGame
             }
         ];
+        this.opponents = [
+            {
+                name: "AI",
+                setUp: function () { }
+            },
+            {
+                name: "Multiplayer",
+                setUp: function () { }
+            }
+        ];
         this.displayUI();
     }
     App.prototype.displayUI = function () {
@@ -435,7 +513,7 @@ var App = /** @class */ (function () {
     };
     return App;
 }());
-// Finally! Run items in HTML
+// Finally! Time to run the app!
 document.addEventListener("DOMContentLoaded", function () {
     new App();
 });
