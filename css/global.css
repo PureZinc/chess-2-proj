@@ -6,6 +6,11 @@ body {
     background-color: #f0f0f0;
 }
 
+#chessboardContainer {
+    display: flex;
+    flex-direction: row;
+}
+
 #chessboard {
     display: grid;
     grid-template-columns: repeat(8, 50px);
@@ -29,4 +34,43 @@ body {
 
 .available {
     background-color: #494949;
+}
+
+#chessboard-details {
+    padding: 1rem;
+    margin-top: 1rem;
+    background-color: #f9f9f9;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    font-family: sans-serif;
+}
+
+.details-block {
+    margin-bottom: 1rem;
+}
+
+#turn-indicator span {
+    font-weight: bold;
+    color: #333;
+}
+
+#move-list {
+    list-style: none;
+    padding-left: 0;
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.9rem;
+    color: #444;
+}
+
+.captured-row {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.3rem;
+}
+
+.captured-row img {
+    width: 24px;
+    height: 24px;
 }

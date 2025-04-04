@@ -1,5 +1,7 @@
 // Everything is contained here!
 // In a larger-scale project, I'd definitely modularize my project into folders!
+// However, due to limits with import/export in pure HTML/CSS/JS, the source code is all on one file.
+
 
 // Types
 type AvailableChessboardSizes = 8 | 10 | 12
@@ -19,6 +21,12 @@ type ChessPieceOnPlay = ChessPieceType & {
     position: Position;
     side: "white" | "black";
     isCaptured: boolean;
+}
+
+type ChessboardData = {
+    movesLog: string[];
+    xbyx: AvailableChessboardSizes;
+    pieces: ChessPieceOnPlay[];
 }
 
 
@@ -103,6 +111,7 @@ class Chessboard {
                 this.blindMove(rook, [rookNewCol, kingRow])
 
                 // Log castling move
+                this.movesLog.push("Castle");
                 this.movesLog.push(isKingside ? "O-O" : "O-O-O");
             }
 
@@ -128,106 +137,21 @@ class Chessboard {
         const flipper = (num: number) => xbyx - num - 1;
         return pos.map(p => flipper(p)) as Position;
     }
-}
 
-
-    // Mounds the Chessboard logic onto an HTML Template
-class ChessboardHTML extends Chessboard {
-    private chessboardContainerDiv: HTMLElement;
-    private selectedPieceId: string | null;
-
-    constructor(
-        public xbyx: AvailableChessboardSizes,
-        public pieces: ChessPieceOnPlay[],
-        elmId: string = "chessboardContainer"
-    ) {
-        super(xbyx, pieces);
-        let checkDiv = document.getElementById(elmId);
-        if (!checkDiv) {
-            console.error(`Div with id '${elmId}' doesn't exist`);
-            return;
-        };
-        this.chessboardContainerDiv = checkDiv;
-
-        this.updateState();
-    }
-
-    displayBoard() {
-        if (!this.chessboardContainerDiv) return;
-        this.chessboardContainerDiv.innerHTML = "";
-
-        let chessboardDiv = document.createElement('div');
-        chessboardDiv.id = "chessboard";
-
-        const availableMoves = this.selectedPieceAvailableMoves();
-
-        for (let col = this.xbyx - 1; col >= 0; col--) {
-            for (let row = 0; row < this.xbyx; row++) {  
-                const square = document.createElement("div");
-                square.classList.add("square");
-                square.id = `pos-${row}-${col}`;
-                if (availableMoves.some(pos => pos[0] === row && pos[1] === col)) {
-                    square.classList.add("available");
-                    square.addEventListener('click', () => {
-                        if (!this.selectedPieceId) return;
-                        this.movePiece(this.selectedPieceId, [row, col]);
-                    })
-                } else if ((row + col) % 2 === 0) {
-                    square.classList.add("white");
-                } else {
-                    square.classList.add("black");
-                }
-                chessboardDiv.appendChild(square);
-            }
+    // Saving and Loading
+    getSaveGameData(): ChessboardData {
+        return {
+            movesLog: this.movesLog,
+            xbyx: this.xbyx,
+            pieces: this.pieces
         }
-
-        this.chessboardContainerDiv.appendChild(chessboardDiv);
     }
 
-    displayPieces() {
-        for (const piece of this.pieces) {
-            if (piece.isCaptured) continue;
-
-            const square = document.getElementById(`pos-${piece.position[0]}-${piece.position[1]}`);
-            if (!square) continue;
-
-            const pieceImage = document.createElement("img");
-            pieceImage.src = `../assets/${piece.name.toLowerCase()}_${piece.side}.png`;
-            pieceImage.alt = piece.name;
-            pieceImage.classList.add("chess-piece");
-
-            if (this.turn === piece.side) {
-                pieceImage.addEventListener('click', () => {
-                    this.setSelectedPiece(piece.id);
-                })
-            }
-
-            square.appendChild(pieceImage);
-        }
-
-    }
-
-    updateState() {
-        this.displayBoard();
-        this.displayPieces();
-    }
-
-    selectedPieceAvailableMoves() {
-        if (!this.selectedPieceId) return [];
-        const selPiece = this.getPieceById(this.selectedPieceId);
-
-        return selPiece?.getAvailablePositions(this, selPiece.position) || [];
-    }
-
-    setSelectedPiece(id: string) {
-        if (!this.getPieceById(id)) return;
-        this.selectedPieceId = this.selectedPieceId === id ? null : id;
-        this.updateState();
-    }
-
-    movePiece(pieceId: string, newPos: Position): void {
-        super.movePiece(pieceId, newPos);
-        this.setSelectedPiece(pieceId);
+    static loadGame(data: ChessboardData) {
+        const chessboard = new Chessboard(data.xbyx, data.pieces);
+        chessboard.movesLog = data.movesLog;
+        chessboard.turn = data.movesLog.length % 2 === 0 ? "white" : "black";
+        return chessboard;
     }
 }
 
@@ -334,7 +258,7 @@ const kingPiece: ChessPieceType = {
         // Add castling moves
         const kingId = board.peekBoardPosition(pos); if (!kingId) return possibleMoves;
         const kingPiece = board.getPieceById(kingId); if (!kingPiece) return possibleMoves;
-        if (pieceHasMoved(board, kingPiece)) return possibleMoves; // Returns moves if King hasn't moved
+        if (pieceHasMoved(board, kingPiece)) return possibleMoves; // Returns moves if King already moved
 
         const team = kingPiece.side;
         const col = pos[1];
@@ -501,6 +425,229 @@ const setUpClassicGame = () => {
 }
 
 
+// Build Classes for Each Page & Component
+type PageComponent = () => void;
+
+class Router {
+    private routes: Map<string, PageComponent> = new Map();
+    private root: HTMLElement;
+
+    constructor(rootId: string) {
+        const rootEl = document.getElementById(rootId);
+        if (!rootEl) throw new Error(`Root element '${rootId}' not found`);
+        this.root = rootEl;
+        window.addEventListener("popstate", () => this.render(location.pathname));
+    }
+
+    register(path: string, component: PageComponent) {
+        this.routes.set(path, component);
+    }
+
+    navigate(path: string) {
+        history.pushState({}, "", path);
+        this.render(path);
+    }
+
+    render(path: string) {
+        this.root.innerHTML = ""; // clear page
+        const component = this.routes.get(path);
+        if (!component) {
+            this.root.innerHTML = "<h1>404 - Page Not Found</h1>";
+            return;
+        }
+        component();
+    }
+}
+
+class MainScreen {
+    private gameModeSelectionDiv: HTMLElement | null = document.getElementById("gameModeSelection");
+    private gameModes: GameModeSelection[] = [
+        {
+            name: "Classic",
+            description: "The standard, most classic way of playing Chess!",
+            setUp: setUpClassicGame
+        }
+    ]
+    private opponents: OpponentSelection[] = [
+        {
+            name: "AI",
+            setUp: () => {}
+        },
+        {
+            name: "Multiplayer",
+            setUp: () => {}
+        }
+    ]
+
+    constructor() {
+        this.displayUI();
+    }
+
+
+    displayUI() {
+        this.gameModes.forEach((mode) => {
+            const button = document.createElement("button");
+            button.innerText = mode.name;
+            button.title = mode.description;
+
+            button.addEventListener("click", () => {
+                if (!this.gameModeSelectionDiv) return;
+                const piecesSetUp = mode.setUp();
+                new ChessboardHTML(8, piecesSetUp, "chessboardContainer");
+                this.gameModeSelectionDiv.innerHTML = "";
+            });
+
+            if (!this.gameModeSelectionDiv) return;
+            this.gameModeSelectionDiv.appendChild(button);
+        });
+    }
+}
+
+
+class ChessboardHTML extends Chessboard {
+    private chessboardContainerDiv: HTMLElement;
+    private gameDetailsDiv: HTMLElement;
+
+    private selectedPieceId: string | null;
+
+    constructor(
+        public xbyx: AvailableChessboardSizes,
+        public pieces: ChessPieceOnPlay[],
+        elmId: string = "chessboardContainer"
+    ) {
+        super(xbyx, pieces);
+        let checkDiv = document.getElementById(elmId);
+        if (!checkDiv) {
+            console.error(`Div with id '${elmId}' doesn't exist`);
+            return;
+        };
+        this.chessboardContainerDiv = checkDiv;
+
+        this.updateState();
+    }
+
+    private getPieceDesign = (piece: ChessPieceOnPlay) => `../assets/${piece.name.toLowerCase()}_${piece.side}.png`;
+
+    private getCapturedHTML(side: TeamSide) {
+        return this.pieces
+            .filter(p => p.isCaptured && p.side === side)
+            .map(p => `<img src="${this.getPieceDesign(p)}" alt="${p.name}">`)
+            .join("");
+    }
+
+    displayBoard() {
+        if (!this.chessboardContainerDiv) return;
+        this.chessboardContainerDiv.innerHTML = "";
+
+        let chessboardDiv = document.createElement('div');
+        chessboardDiv.id = "chessboard";
+
+        const availableMoves = this.selectedPieceAvailableMoves();
+
+        for (let col = this.xbyx - 1; col >= 0; col--) {
+            for (let row = 0; row < this.xbyx; row++) {  
+                const square = document.createElement("div");
+                square.classList.add("square");
+                square.id = `pos-${row}-${col}`;
+                if (availableMoves.some(pos => pos[0] === row && pos[1] === col)) {
+                    square.classList.add("available");
+                    square.addEventListener('click', () => {
+                        if (!this.selectedPieceId) return;
+                        this.movePiece(this.selectedPieceId, [row, col]);
+                    })
+                } else if ((row + col) % 2 === 0) {
+                    square.classList.add("white");
+                } else {
+                    square.classList.add("black");
+                }
+                chessboardDiv.appendChild(square);
+            }
+        }
+
+        this.chessboardContainerDiv.appendChild(chessboardDiv);
+    }
+
+    displayPieces() {
+        for (const piece of this.pieces) {
+            if (piece.isCaptured) continue;
+
+            const square = document.getElementById(`pos-${piece.position[0]}-${piece.position[1]}`);
+            if (!square) continue;
+
+            const pieceImage = document.createElement("img");
+            pieceImage.src = this.getPieceDesign(piece);
+            pieceImage.alt = piece.name;
+            pieceImage.classList.add("chess-piece");
+
+            if (this.turn === piece.side) {
+                pieceImage.addEventListener('click', () => {
+                    this.setSelectedPiece(piece.id);
+                })
+            }
+
+            square.appendChild(pieceImage);
+        }
+
+    }
+
+    displayDetails() {
+        if (this.gameDetailsDiv) this.gameDetailsDiv.remove();
+
+        const details = document.createElement("div");
+        details.id = "chessboard-details";
+
+        // Turn Indicator
+        const turnIndicator = document.createElement("div");
+        turnIndicator.classList.add("details-block");
+        turnIndicator.innerHTML = `<strong>Turn:</strong> <span id="turn-color">${this.turn}</span>`;
+        details.appendChild(turnIndicator);
+
+        // Move Log
+        const moveLog = document.createElement("div");
+        moveLog.classList.add("details-block");
+        moveLog.innerHTML = `<strong>Moves:</strong><ul id="move-list">${this.movesLog.map(m => `<li>${m}</li>`).join("")}</ul>`;
+        details.appendChild(moveLog);
+
+        // Captured Pieces
+        const capturedDiv = document.createElement("div");
+        capturedDiv.classList.add("details-block");
+        capturedDiv.innerHTML = `
+            <strong>Captured:</strong>
+            <div class="captured-row"><span>White:</span> ${this.getCapturedHTML("white")}</div>
+            <div class="captured-row"><span>Black:</span> ${this.getCapturedHTML("black")}</div>
+        `;
+        details.appendChild(capturedDiv);
+
+        this.gameDetailsDiv = details;
+        this.chessboardContainerDiv.appendChild(details);
+    }
+
+    updateState() {
+        this.displayBoard();
+        this.displayPieces();
+        this.displayDetails();
+    }
+
+    selectedPieceAvailableMoves() {
+        if (!this.selectedPieceId) return [];
+        const selPiece = this.getPieceById(this.selectedPieceId);
+
+        return selPiece?.getAvailablePositions(this, selPiece.position) || [];
+    }
+
+    setSelectedPiece(id: string) {
+        if (!this.getPieceById(id)) return;
+        this.selectedPieceId = this.selectedPieceId === id ? null : id;
+        this.updateState();
+    }
+
+    movePiece(pieceId: string, newPos: Position): void {
+        super.movePiece(pieceId, newPos);
+        this.setSelectedPiece(pieceId);
+    }
+}
+
+
 // Now let's build the entire App!
 type GameModeSelection = {
     name: string,
@@ -512,6 +659,7 @@ type OpponentSelection = {
     setUp: () => void;
 }
 class App {
+    private rootDiv: HTMLElement | null = document.getElementById("root");
     private gameModeSelectionDiv: HTMLElement | null = document.getElementById("gameModeSelection");
     private gameModes: GameModeSelection[] = [
         {

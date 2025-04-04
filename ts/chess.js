@@ -1,4 +1,6 @@
-// Everything is contained here to maintain a balance
+// Everything is contained here!
+// In a larger-scale project, I'd definitely modularize my project into folders!
+// However, due to limits with import/export in pure HTML/CSS/JS, the source code is all on one file.
 var __extends = (this && this.__extends) || (function () {
     var extendStatics = function (d, b) {
         extendStatics = Object.setPrototypeOf ||
@@ -34,8 +36,9 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     }
     return to.concat(ar || Array.prototype.slice.call(from));
 };
-// Classes
+// Utilities
 var randomIdGenerator = function () { return Math.random().toString(36).substring(2, 8); };
+// Classes
 var Chessboard = /** @class */ (function () {
     function Chessboard(xbyx, pieces) {
         var _this = this;
@@ -90,7 +93,7 @@ var Chessboard = /** @class */ (function () {
                 && Math.abs(newPos[0] - pieceSelected.position[0]) > 1) {
                 var kingRow = pieceSelected.position[1];
                 var isKingside = newPos[0] > pieceSelected.position[0];
-                var rookStartCol = isKingside ? 7 : 0;
+                var rookStartCol = isKingside ? this.xbyx - 1 : 0;
                 var rookNewCol = isKingside
                     ? newPos[0] - 1
                     : newPos[0] + 1;
@@ -103,6 +106,7 @@ var Chessboard = /** @class */ (function () {
                 // Moves the Rook
                 this.blindMove(rook, [rookNewCol, kingRow]);
                 // Log castling move
+                this.movesLog.push("Castle");
                 this.movesLog.push(isKingside ? "O-O" : "O-O-O");
             }
             // Swaps positions on the board
@@ -125,112 +129,22 @@ var Chessboard = /** @class */ (function () {
         var flipper = function (num) { return xbyx - num - 1; };
         return pos.map(function (p) { return flipper(p); });
     };
+    // Saving and Loading
+    Chessboard.prototype.getSaveGameData = function () {
+        return {
+            movesLog: this.movesLog,
+            xbyx: this.xbyx,
+            pieces: this.pieces
+        };
+    };
+    Chessboard.loadGame = function (data) {
+        var chessboard = new Chessboard(data.xbyx, data.pieces);
+        chessboard.movesLog = data.movesLog;
+        chessboard.turn = data.movesLog.length % 2 === 0 ? "white" : "black";
+        return chessboard;
+    };
     return Chessboard;
 }());
-// Mounds the Chessboard logic onto an HTML Template
-var ChessboardHTML = /** @class */ (function (_super) {
-    __extends(ChessboardHTML, _super);
-    function ChessboardHTML(xbyx, pieces, elmId) {
-        if (elmId === void 0) { elmId = "chessboardContainer"; }
-        var _this = _super.call(this, xbyx, pieces) || this;
-        _this.xbyx = xbyx;
-        _this.pieces = pieces;
-        var checkDiv = document.getElementById(elmId);
-        if (!checkDiv) {
-            console.error("Div with id '".concat(elmId, "' doesn't exist"));
-            return _this;
-        }
-        ;
-        _this.chessboardContainerDiv = checkDiv;
-        _this.updateState();
-        return _this;
-    }
-    ChessboardHTML.prototype.displayBoard = function () {
-        var _this = this;
-        if (!this.chessboardContainerDiv)
-            return;
-        this.chessboardContainerDiv.innerHTML = "";
-        var chessboardDiv = document.createElement('div');
-        chessboardDiv.id = "chessboard";
-        var availableMoves = this.selectedPieceAvailableMoves();
-        var _loop_1 = function (col) {
-            var _loop_2 = function (row) {
-                var square = document.createElement("div");
-                square.classList.add("square");
-                square.id = "pos-".concat(row, "-").concat(col);
-                if (availableMoves.some(function (pos) { return pos[0] === row && pos[1] === col; })) {
-                    square.classList.add("available");
-                    square.addEventListener('click', function () {
-                        if (!_this.selectedPieceId)
-                            return;
-                        _this.movePiece(_this.selectedPieceId, [row, col]);
-                    });
-                }
-                else if ((row + col) % 2 === 0) {
-                    square.classList.add("white");
-                }
-                else {
-                    square.classList.add("black");
-                }
-                chessboardDiv.appendChild(square);
-            };
-            for (var row = 0; row < this_1.xbyx; row++) {
-                _loop_2(row);
-            }
-        };
-        var this_1 = this;
-        for (var col = this.xbyx - 1; col >= 0; col--) {
-            _loop_1(col);
-        }
-        this.chessboardContainerDiv.appendChild(chessboardDiv);
-    };
-    ChessboardHTML.prototype.displayPieces = function () {
-        var _this = this;
-        var _loop_3 = function (piece) {
-            if (piece.isCaptured)
-                return "continue";
-            var square = document.getElementById("pos-".concat(piece.position[0], "-").concat(piece.position[1]));
-            if (!square)
-                return "continue";
-            var pieceImage = document.createElement("img");
-            pieceImage.src = "../assets/".concat(piece.name.toLowerCase(), "_").concat(piece.side, ".png");
-            pieceImage.alt = piece.name;
-            pieceImage.classList.add("chess-piece");
-            if (this_2.turn === piece.side) {
-                pieceImage.addEventListener('click', function () {
-                    _this.setSelectedPiece(piece.id);
-                });
-            }
-            square.appendChild(pieceImage);
-        };
-        var this_2 = this;
-        for (var _i = 0, _a = this.pieces; _i < _a.length; _i++) {
-            var piece = _a[_i];
-            _loop_3(piece);
-        }
-    };
-    ChessboardHTML.prototype.updateState = function () {
-        this.displayBoard();
-        this.displayPieces();
-    };
-    ChessboardHTML.prototype.selectedPieceAvailableMoves = function () {
-        if (!this.selectedPieceId)
-            return [];
-        var selPiece = this.getPieceById(this.selectedPieceId);
-        return (selPiece === null || selPiece === void 0 ? void 0 : selPiece.getAvailablePositions(this, selPiece.position)) || [];
-    };
-    ChessboardHTML.prototype.setSelectedPiece = function (id) {
-        if (!this.getPieceById(id))
-            return;
-        this.selectedPieceId = this.selectedPieceId === id ? null : id;
-        this.updateState();
-    };
-    ChessboardHTML.prototype.movePiece = function (pieceId, newPos) {
-        _super.prototype.movePiece.call(this, pieceId, newPos);
-        this.setSelectedPiece(pieceId);
-    };
-    return ChessboardHTML;
-}(Chessboard));
 // Pieces
 //Built-In Utilities
 var sameTeamPosTaken = function (board, pos) {
@@ -333,7 +247,7 @@ var kingPiece = {
         if (!kingPiece)
             return possibleMoves;
         if (pieceHasMoved(board, kingPiece))
-            return possibleMoves; // Returns moves if King hasn't moved
+            return possibleMoves; // Returns moves if King already moved
         var team = kingPiece.side;
         var col = pos[1];
         var tryCastle = function (rookRow, pathRows, targetRow) {
@@ -471,8 +385,145 @@ var setUpClassicGame = function () {
     }
     return pieceLayout;
 };
+// Build Classes for Each Page & Component
+var ChessboardHTML = /** @class */ (function (_super) {
+    __extends(ChessboardHTML, _super);
+    function ChessboardHTML(xbyx, pieces, elmId) {
+        if (elmId === void 0) { elmId = "chessboardContainer"; }
+        var _this = _super.call(this, xbyx, pieces) || this;
+        _this.xbyx = xbyx;
+        _this.pieces = pieces;
+        _this.getPieceDesign = function (piece) { return "../assets/".concat(piece.name.toLowerCase(), "_").concat(piece.side, ".png"); };
+        var checkDiv = document.getElementById(elmId);
+        if (!checkDiv) {
+            console.error("Div with id '".concat(elmId, "' doesn't exist"));
+            return _this;
+        }
+        ;
+        _this.chessboardContainerDiv = checkDiv;
+        _this.updateState();
+        return _this;
+    }
+    ChessboardHTML.prototype.getCapturedHTML = function (side) {
+        var _this = this;
+        return this.pieces
+            .filter(function (p) { return p.isCaptured && p.side === side; })
+            .map(function (p) { return "<img src=\"".concat(_this.getPieceDesign(p), "\" alt=\"").concat(p.name, "\">"); })
+            .join("");
+    };
+    ChessboardHTML.prototype.displayBoard = function () {
+        var _this = this;
+        if (!this.chessboardContainerDiv)
+            return;
+        this.chessboardContainerDiv.innerHTML = "";
+        var chessboardDiv = document.createElement('div');
+        chessboardDiv.id = "chessboard";
+        var availableMoves = this.selectedPieceAvailableMoves();
+        var _loop_1 = function (col) {
+            var _loop_2 = function (row) {
+                var square = document.createElement("div");
+                square.classList.add("square");
+                square.id = "pos-".concat(row, "-").concat(col);
+                if (availableMoves.some(function (pos) { return pos[0] === row && pos[1] === col; })) {
+                    square.classList.add("available");
+                    square.addEventListener('click', function () {
+                        if (!_this.selectedPieceId)
+                            return;
+                        _this.movePiece(_this.selectedPieceId, [row, col]);
+                    });
+                }
+                else if ((row + col) % 2 === 0) {
+                    square.classList.add("white");
+                }
+                else {
+                    square.classList.add("black");
+                }
+                chessboardDiv.appendChild(square);
+            };
+            for (var row = 0; row < this_1.xbyx; row++) {
+                _loop_2(row);
+            }
+        };
+        var this_1 = this;
+        for (var col = this.xbyx - 1; col >= 0; col--) {
+            _loop_1(col);
+        }
+        this.chessboardContainerDiv.appendChild(chessboardDiv);
+    };
+    ChessboardHTML.prototype.displayPieces = function () {
+        var _this = this;
+        var _loop_3 = function (piece) {
+            if (piece.isCaptured)
+                return "continue";
+            var square = document.getElementById("pos-".concat(piece.position[0], "-").concat(piece.position[1]));
+            if (!square)
+                return "continue";
+            var pieceImage = document.createElement("img");
+            pieceImage.src = this_2.getPieceDesign(piece);
+            pieceImage.alt = piece.name;
+            pieceImage.classList.add("chess-piece");
+            if (this_2.turn === piece.side) {
+                pieceImage.addEventListener('click', function () {
+                    _this.setSelectedPiece(piece.id);
+                });
+            }
+            square.appendChild(pieceImage);
+        };
+        var this_2 = this;
+        for (var _i = 0, _a = this.pieces; _i < _a.length; _i++) {
+            var piece = _a[_i];
+            _loop_3(piece);
+        }
+    };
+    ChessboardHTML.prototype.displayDetails = function () {
+        if (this.gameDetailsDiv)
+            this.gameDetailsDiv.remove();
+        var details = document.createElement("div");
+        details.id = "chessboard-details";
+        // Turn Indicator
+        var turnIndicator = document.createElement("div");
+        turnIndicator.classList.add("details-block");
+        turnIndicator.innerHTML = "<strong>Turn:</strong> <span id=\"turn-color\">".concat(this.turn, "</span>");
+        details.appendChild(turnIndicator);
+        // Move Log
+        var moveLog = document.createElement("div");
+        moveLog.classList.add("details-block");
+        moveLog.innerHTML = "<strong>Moves:</strong><ul id=\"move-list\">".concat(this.movesLog.map(function (m) { return "<li>".concat(m, "</li>"); }).join(""), "</ul>");
+        details.appendChild(moveLog);
+        // Captured Pieces
+        var capturedDiv = document.createElement("div");
+        capturedDiv.classList.add("details-block");
+        capturedDiv.innerHTML = "\n            <strong>Captured:</strong>\n            <div class=\"captured-row\"><span>White:</span> ".concat(this.getCapturedHTML("white"), "</div>\n            <div class=\"captured-row\"><span>Black:</span> ").concat(this.getCapturedHTML("black"), "</div>\n        ");
+        details.appendChild(capturedDiv);
+        this.gameDetailsDiv = details;
+        this.chessboardContainerDiv.appendChild(details);
+    };
+    ChessboardHTML.prototype.updateState = function () {
+        this.displayBoard();
+        this.displayPieces();
+        this.displayDetails();
+    };
+    ChessboardHTML.prototype.selectedPieceAvailableMoves = function () {
+        if (!this.selectedPieceId)
+            return [];
+        var selPiece = this.getPieceById(this.selectedPieceId);
+        return (selPiece === null || selPiece === void 0 ? void 0 : selPiece.getAvailablePositions(this, selPiece.position)) || [];
+    };
+    ChessboardHTML.prototype.setSelectedPiece = function (id) {
+        if (!this.getPieceById(id))
+            return;
+        this.selectedPieceId = this.selectedPieceId === id ? null : id;
+        this.updateState();
+    };
+    ChessboardHTML.prototype.movePiece = function (pieceId, newPos) {
+        _super.prototype.movePiece.call(this, pieceId, newPos);
+        this.setSelectedPiece(pieceId);
+    };
+    return ChessboardHTML;
+}(Chessboard));
 var App = /** @class */ (function () {
     function App() {
+        this.rootDiv = document.getElementById("root");
         this.gameModeSelectionDiv = document.getElementById("gameModeSelection");
         this.gameModes = [
             {
