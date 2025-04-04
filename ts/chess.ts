@@ -428,39 +428,39 @@ const setUpClassicGame = () => {
 // Build Classes for Each Page & Component
 type PageComponent = () => void;
 
-class Router {
-    private routes: Map<string, PageComponent> = new Map();
-    private root: HTMLElement;
+// class Router {
+//     private routes: Map<string, PageComponent> = new Map();
+//     private root: HTMLElement;
 
-    constructor(rootId: string) {
-        const rootEl = document.getElementById(rootId);
-        if (!rootEl) throw new Error(`Root element '${rootId}' not found`);
-        this.root = rootEl;
-        window.addEventListener("popstate", () => this.render(location.pathname));
-    }
+//     constructor(rootId: string) {
+//         const rootEl = document.getElementById(rootId);
+//         if (!rootEl) throw new Error(`Root element '${rootId}' not found`);
+//         this.root = rootEl;
+//         window.addEventListener("popstate", () => this.render(location.pathname));
+//     }
 
-    register(path: string, component: PageComponent) {
-        this.routes.set(path, component);
-    }
+//     register(path: string, component: PageComponent) {
+//         this.routes.set(path, component);
+//     }
 
-    navigate(path: string) {
-        history.pushState({}, "", path);
-        this.render(path);
-    }
+//     navigate(path: string) {
+//         history.pushState({}, "", path);
+//         this.render(path);
+//     }
 
-    render(path: string) {
-        this.root.innerHTML = ""; // clear page
-        const component = this.routes.get(path);
-        if (!component) {
-            this.root.innerHTML = "<h1>404 - Page Not Found</h1>";
-            return;
-        }
-        component();
-    }
-}
+//     render(path: string) {
+//         this.root.innerHTML = ""; // clear page
+//         const component = this.routes.get(path);
+//         if (!component) {
+//             this.root.innerHTML = "<h1>404 - Page Not Found</h1>";
+//             return;
+//         }
+//         component();
+//     }
+// }
 
 class MainScreen {
-    private gameModeSelectionDiv: HTMLElement | null = document.getElementById("gameModeSelection");
+    private gameModeSelectionDiv: HTMLElement | null;
     private gameModes: GameModeSelection[] = [
         {
             name: "Classic",
@@ -468,43 +468,46 @@ class MainScreen {
             setUp: setUpClassicGame
         }
     ]
-    private opponents: OpponentSelection[] = [
-        {
-            name: "AI",
-            setUp: () => {}
-        },
-        {
-            name: "Multiplayer",
-            setUp: () => {}
-        }
-    ]
+    public rootDiv = document.getElementById("root");
 
     constructor() {
         this.displayUI();
     }
 
-
     displayUI() {
+        const gameModeSelectionDiv = document.createElement("div");
+        gameModeSelectionDiv.className = "main-container";
+
+        const title = document.createElement("p");
+        title.innerText = "Choose Game Mode";
+        gameModeSelectionDiv.appendChild(title);
+
+        const gameModeSelection = document.createElement("div");
+        gameModeSelection.id = "gameModeSelection";
+
         this.gameModes.forEach((mode) => {
             const button = document.createElement("button");
             button.innerText = mode.name;
             button.title = mode.description;
 
             button.addEventListener("click", () => {
-                if (!this.gameModeSelectionDiv) return;
                 const piecesSetUp = mode.setUp();
                 new ChessboardHTML(8, piecesSetUp, "chessboardContainer");
-                this.gameModeSelectionDiv.innerHTML = "";
+                gameModeSelectionDiv.remove();
             });
 
-            if (!this.gameModeSelectionDiv) return;
-            this.gameModeSelectionDiv.appendChild(button);
+            gameModeSelection.appendChild(button);
         });
+
+        gameModeSelectionDiv.appendChild(gameModeSelection);
+
+        this.rootDiv?.appendChild(gameModeSelectionDiv);
     }
 }
 
 
 class ChessboardHTML extends Chessboard {
+    public rootDiv = document.getElementById("root");
     private chessboardContainerDiv: HTMLElement;
     private gameDetailsDiv: HTMLElement;
 
@@ -618,6 +621,8 @@ class ChessboardHTML extends Chessboard {
         `;
         details.appendChild(capturedDiv);
 
+        // Save Button
+
         this.gameDetailsDiv = details;
         this.chessboardContainerDiv.appendChild(details);
     }
@@ -659,46 +664,12 @@ type OpponentSelection = {
     setUp: () => void;
 }
 class App {
-    private rootDiv: HTMLElement | null = document.getElementById("root");
-    private gameModeSelectionDiv: HTMLElement | null = document.getElementById("gameModeSelection");
-    private gameModes: GameModeSelection[] = [
-        {
-            name: "Classic",
-            description: "The standard, most classic way of playing Chess!",
-            setUp: setUpClassicGame
-        }
-    ]
-    private opponents: OpponentSelection[] = [
-        {
-            name: "AI",
-            setUp: () => {}
-        },
-        {
-            name: "Multiplayer",
-            setUp: () => {}
-        }
-    ]
-
     constructor() {
         this.displayUI();
     }
 
     displayUI() {
-        this.gameModes.forEach((mode) => {
-            const button = document.createElement("button");
-            button.innerText = mode.name;
-            button.title = mode.description;
-
-            button.addEventListener("click", () => {
-                if (!this.gameModeSelectionDiv) return;
-                const piecesSetUp = mode.setUp();
-                new ChessboardHTML(8, piecesSetUp, "chessboardContainer");
-                this.gameModeSelectionDiv.innerHTML = "";
-            });
-
-            if (!this.gameModeSelectionDiv) return;
-            this.gameModeSelectionDiv.appendChild(button);
-        });
+        new MainScreen();
     }
 }
 

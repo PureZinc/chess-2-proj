@@ -385,7 +385,69 @@ var setUpClassicGame = function () {
     }
     return pieceLayout;
 };
-// Build Classes for Each Page & Component
+// class Router {
+//     private routes: Map<string, PageComponent> = new Map();
+//     private root: HTMLElement;
+//     constructor(rootId: string) {
+//         const rootEl = document.getElementById(rootId);
+//         if (!rootEl) throw new Error(`Root element '${rootId}' not found`);
+//         this.root = rootEl;
+//         window.addEventListener("popstate", () => this.render(location.pathname));
+//     }
+//     register(path: string, component: PageComponent) {
+//         this.routes.set(path, component);
+//     }
+//     navigate(path: string) {
+//         history.pushState({}, "", path);
+//         this.render(path);
+//     }
+//     render(path: string) {
+//         this.root.innerHTML = ""; // clear page
+//         const component = this.routes.get(path);
+//         if (!component) {
+//             this.root.innerHTML = "<h1>404 - Page Not Found</h1>";
+//             return;
+//         }
+//         component();
+//     }
+// }
+var MainScreen = /** @class */ (function () {
+    function MainScreen() {
+        this.gameModes = [
+            {
+                name: "Classic",
+                description: "The standard, most classic way of playing Chess!",
+                setUp: setUpClassicGame
+            }
+        ];
+        this.rootDiv = document.getElementById("root");
+        this.displayUI();
+    }
+    MainScreen.prototype.displayUI = function () {
+        var _a;
+        var gameModeSelectionDiv = document.createElement("div");
+        gameModeSelectionDiv.className = "main-container";
+        var title = document.createElement("p");
+        title.innerText = "Choose Game Mode";
+        gameModeSelectionDiv.appendChild(title);
+        var gameModeSelection = document.createElement("div");
+        gameModeSelection.id = "gameModeSelection";
+        this.gameModes.forEach(function (mode) {
+            var button = document.createElement("button");
+            button.innerText = mode.name;
+            button.title = mode.description;
+            button.addEventListener("click", function () {
+                var piecesSetUp = mode.setUp();
+                new ChessboardHTML(8, piecesSetUp, "chessboardContainer");
+                gameModeSelectionDiv.remove();
+            });
+            gameModeSelection.appendChild(button);
+        });
+        gameModeSelectionDiv.appendChild(gameModeSelection);
+        (_a = this.rootDiv) === null || _a === void 0 ? void 0 : _a.appendChild(gameModeSelectionDiv);
+    };
+    return MainScreen;
+}());
 var ChessboardHTML = /** @class */ (function (_super) {
     __extends(ChessboardHTML, _super);
     function ChessboardHTML(xbyx, pieces, elmId) {
@@ -393,6 +455,7 @@ var ChessboardHTML = /** @class */ (function (_super) {
         var _this = _super.call(this, xbyx, pieces) || this;
         _this.xbyx = xbyx;
         _this.pieces = pieces;
+        _this.rootDiv = document.getElementById("root");
         _this.getPieceDesign = function (piece) { return "../assets/".concat(piece.name.toLowerCase(), "_").concat(piece.side, ".png"); };
         var checkDiv = document.getElementById(elmId);
         if (!checkDiv) {
@@ -523,44 +586,10 @@ var ChessboardHTML = /** @class */ (function (_super) {
 }(Chessboard));
 var App = /** @class */ (function () {
     function App() {
-        this.rootDiv = document.getElementById("root");
-        this.gameModeSelectionDiv = document.getElementById("gameModeSelection");
-        this.gameModes = [
-            {
-                name: "Classic",
-                description: "The standard, most classic way of playing Chess!",
-                setUp: setUpClassicGame
-            }
-        ];
-        this.opponents = [
-            {
-                name: "AI",
-                setUp: function () { }
-            },
-            {
-                name: "Multiplayer",
-                setUp: function () { }
-            }
-        ];
         this.displayUI();
     }
     App.prototype.displayUI = function () {
-        var _this = this;
-        this.gameModes.forEach(function (mode) {
-            var button = document.createElement("button");
-            button.innerText = mode.name;
-            button.title = mode.description;
-            button.addEventListener("click", function () {
-                if (!_this.gameModeSelectionDiv)
-                    return;
-                var piecesSetUp = mode.setUp();
-                new ChessboardHTML(8, piecesSetUp, "chessboardContainer");
-                _this.gameModeSelectionDiv.innerHTML = "";
-            });
-            if (!_this.gameModeSelectionDiv)
-                return;
-            _this.gameModeSelectionDiv.appendChild(button);
-        });
+        new MainScreen();
     };
     return App;
 }());
