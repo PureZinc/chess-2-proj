@@ -6,6 +6,15 @@ body {
     background-color: #f0f0f0;
 }
 
+button {
+    background-color: #769656;
+    border: 2px solid black;
+    border-radius: 10px;
+    font-size: 30px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 #chessboardContainer {
     display: flex;
     flex-direction: row;
@@ -22,6 +31,10 @@ body {
 .chess-piece {
     width: 50px;
     height: 50px;
+}
+
+.chess-piece.turn-side:hover {
+    cursor: pointer;
 }
 
 .black {
@@ -73,4 +86,16 @@ body {
 .captured-row img {
     width: 24px;
     height: 24px;
+}
+
+.main-container {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+#gameModeSelection {
+    display: flex;
+    align-items: center;
+    justify-content: space-evenly;
 }

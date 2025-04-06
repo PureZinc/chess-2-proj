@@ -39,6 +39,7 @@ class Chessboard {
     public board: Board;
     public turn: TeamSide = "white";
     public movesLog: string[] = [];
+    public winner: TeamSide | "draw" | null = null;
 
     constructor(
         public xbyx: AvailableChessboardSizes,
@@ -49,23 +50,6 @@ class Chessboard {
         this.pieces.forEach(piece => {
             this.setPositionOnBoard(piece.position, piece.id);
         })
-    }
-
-    private setPositionOnBoard(pos: Position, setTo: string | null) {
-        this.board[pos[0]][pos[1]] = setTo;
-    }
-
-    private changeTurn() {
-        this.turn = this.turn === "white" ? "black" : "white";
-    }
-
-    private blindMove(piece: ChessPieceOnPlay, newPos: Position, logMove: boolean = false) {
-        this.setPositionOnBoard(piece.position, null);
-        piece.position = newPos;
-        this.setPositionOnBoard(piece.position, piece.id);
-
-        // Log Piece
-        if (logMove) this.movesLog.push(`${piece.name}-${this.asAlgebraicNotation(newPos)}`);
     }
 
     getSideMoves() {
@@ -81,51 +65,137 @@ class Chessboard {
         return this.board[pos[0]][pos[1]];
     }
 
+    private setPositionOnBoard(pos: Position, setTo: string | null) {
+        this.board[pos[0]][pos[1]] = setTo;
+    }
+
+    private changeTurn() {
+        this.turn = this.turn === "white" ? "black" : "white";
+    }
+
+    private blindMove(piece: ChessPieceOnPlay, newPos: Position) {
+        this.setPositionOnBoard(piece.position, null);
+        piece.position = newPos;
+        this.setPositionOnBoard(piece.position, piece.id);
+    }
+
+    private logMove(piece: ChessPieceOnPlay, newPos: Position) {
+        const asString = `${piece.name}-${this.asAlgebraicNotation(newPos)}`;
+        this.movesLog.push(asString);
+    }
+
+    private replacePiece(id: string, newPiece: ChessPieceOnPlay): void {
+        const index = this.pieces.findIndex(p => p.id === id);
+        if (index !== -1) {
+            this.pieces[index] = newPiece;
+        }
+
+        this.setPositionOnBoard(newPiece.position, newPiece.id);
+    }
+
+    private getAllPossibleMoves(side: TeamSide) {
+        const oppPieces = this.pieces.filter(piece => piece.side === side && !piece.isCaptured);
+        let possibleMoves = []
+        for (const piece of oppPieces) {
+            const moves = piece.getAvailablePositions(this, piece.position);
+            possibleMoves = [...possibleMoves, ...moves]
+        }
+        return possibleMoves;
+    }
+
+    private castling(pieceSelected: ChessPieceOnPlay, newPos: Position) {
+        if (
+            pieceSelected.name === "King"
+            && Math.abs(newPos[0] - pieceSelected.position[0]) > 1
+        ) {
+            const kingRow = pieceSelected.position[1];
+            const isKingside = newPos[0] > pieceSelected.position[0];
+            const rookStartCol = isKingside ? this.xbyx - 1 : 0;
+            const rookNewCol = isKingside
+                ? newPos[0] - 1
+                : newPos[0] + 1;
+
+            const rookId = this.peekBoardPosition([rookStartCol, kingRow]); if (!rookId) return;
+            const rook = this.getPieceById(rookId); if (!rook || rook.name !== "Rook") return;
+
+            // Moves the Rook
+            this.blindMove(rook, [rookNewCol, kingRow])
+
+            // Log castling move
+            this.movesLog.push("Castle");
+            this.movesLog.push(isKingside ? "O-O-O" : "O-O");
+        }
+    }
+
+    private promotion(pieceSelected: ChessPieceOnPlay, newPos: Position) {
+        const endRank = this.turn === "white" ? this.xbyx - 1 : 0;
+
+        if (
+            pieceSelected.name === "Pawn"
+            && newPos[1] === endRank
+        ) {
+
+            const promotedPiece: ChessPieceOnPlay = {
+                ...queenPiece,
+                id: pieceSelected.id,
+                position: newPos,
+                isCaptured: false,
+                side: this.turn
+            };
+
+            this.replacePiece(pieceSelected.id, promotedPiece);
+
+            // Log promotion move
+            this.movesLog.push("Promotion");
+            this.movesLog.push("To Queen");
+        }
+    }
+
+    private isInCheck(sideToCheck: TeamSide) {
+        const king = this.pieces.find(piece => piece.name === "King" && piece.side === sideToCheck);
+
+        const opponentSide = sideToCheck === "white" ? "black" : "white";
+        const attacks = this.getAllPossibleMoves(opponentSide);
+
+        return attacks.some(([x, y]) => x === king.position[0] && y === king.position[1]);
+    }
+
+    private checkForWin() {}
+
     movePiece(pieceId: string, newPos: Position) {
         // Get Piece form board
         const pieceSelected = this.getPieceById(pieceId); if (!pieceSelected) return;
 
         // Check if move is legal
         const availableMoves = pieceSelected.getAvailablePositions(this, pieceSelected.position);
-        if (availableMoves.some(pos => pos[0] === newPos[0] && pos[1] === newPos[1])) {
-            // Captures piece
-            const pieceCapturedId = this.peekBoardPosition(newPos);
-            if (pieceCapturedId) this.capturePiece(pieceCapturedId);
+        if (availableMoves.some(([x, y]) => x === newPos[0] && y === newPos[1])) {
 
-            // For cases of castling
-            if (
-                pieceSelected.name === "King"
-                && Math.abs(newPos[0] - pieceSelected.position[0]) > 1
-            ) {
-                const kingRow = pieceSelected.position[1];
-                const isKingside = newPos[0] > pieceSelected.position[0];
-                const rookStartCol = isKingside ? this.xbyx - 1 : 0;
-                const rookNewCol = isKingside
-                    ? newPos[0] - 1
-                    : newPos[0] + 1;
+            // Cache's last move
+            let oldPos = pieceSelected.position;
+            let previousId = this.peekBoardPosition(newPos);
 
-                const rookId = this.peekBoardPosition([rookStartCol, kingRow]); if (!rookId) return;
-                const rook = this.getPieceById(rookId); if (!rook || rook.name !== "Rook") return;
+            // Simulates move on the board
+            this.blindMove(pieceSelected, newPos);
+            let previousPiece = this.capturePiece(previousId) || null;
 
-                // Moves the Rook
-                this.blindMove(rook, [rookNewCol, kingRow])
+            // We'll run a few tests here
+            
 
-                // Log castling move
-                this.movesLog.push("Castle");
-                this.movesLog.push(isKingside ? "O-O" : "O-O-O");
-            }
+            // Now let's actually make the move!
+            this.castling(pieceSelected, newPos);
+            this.promotion(pieceSelected, newPos);
+            this.logMove(pieceSelected, newPos);
+            this.checkForWin();
 
-            // Swaps positions on the board
-            this.blindMove(pieceSelected, newPos, true);
-
-            // Changes team
             this.changeTurn();
         }
     }
 
-    capturePiece(pieceId: string) {
-        const capturePiece = this.getPieceById(pieceId); if (!capturePiece) return;
-        capturePiece.isCaptured = true;
+    capturePiece(pieceId: string | null): ChessPieceOnPlay | null {
+        if (!pieceId) return;
+        const capturedPiece = this.getPieceById(pieceId); if (!capturedPiece) return;
+        capturedPiece.isCaptured = true;
+        return capturedPiece;
     }
 
     asAlgebraicNotation(pos: Position): string {
@@ -426,39 +496,6 @@ const setUpClassicGame = () => {
 
 
 // Build Classes for Each Page & Component
-type PageComponent = () => void;
-
-// class Router {
-//     private routes: Map<string, PageComponent> = new Map();
-//     private root: HTMLElement;
-
-//     constructor(rootId: string) {
-//         const rootEl = document.getElementById(rootId);
-//         if (!rootEl) throw new Error(`Root element '${rootId}' not found`);
-//         this.root = rootEl;
-//         window.addEventListener("popstate", () => this.render(location.pathname));
-//     }
-
-//     register(path: string, component: PageComponent) {
-//         this.routes.set(path, component);
-//     }
-
-//     navigate(path: string) {
-//         history.pushState({}, "", path);
-//         this.render(path);
-//     }
-
-//     render(path: string) {
-//         this.root.innerHTML = ""; // clear page
-//         const component = this.routes.get(path);
-//         if (!component) {
-//             this.root.innerHTML = "<h1>404 - Page Not Found</h1>";
-//             return;
-//         }
-//         component();
-//     }
-// }
-
 class MainScreen {
     private gameModeSelectionDiv: HTMLElement | null;
     private gameModes: GameModeSelection[] = [
@@ -478,9 +515,13 @@ class MainScreen {
         const gameModeSelectionDiv = document.createElement("div");
         gameModeSelectionDiv.className = "main-container";
 
-        const title = document.createElement("p");
-        title.innerText = "Choose Game Mode";
+        const title = document.createElement("h1");
+        title.innerText = "Welcome to Chess 2!";
         gameModeSelectionDiv.appendChild(title);
+
+        const gameModeTitle = document.createElement("h3");
+        gameModeTitle.innerText = "Choose Game Mode";
+        gameModeSelectionDiv.appendChild(gameModeTitle);
 
         const gameModeSelection = document.createElement("div");
         gameModeSelection.id = "gameModeSelection";
@@ -583,6 +624,7 @@ class ChessboardHTML extends Chessboard {
             pieceImage.classList.add("chess-piece");
 
             if (this.turn === piece.side) {
+                pieceImage.classList.add("turn-side")
                 pieceImage.addEventListener('click', () => {
                     this.setSelectedPiece(piece.id);
                 })
