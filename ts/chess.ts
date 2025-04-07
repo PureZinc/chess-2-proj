@@ -98,6 +98,7 @@ class Chessboard {
         let possibleMoves = []
         for (const piece of oppPieces) {
             const moves = piece.getAvailablePositions(this, piece.position);
+            console.log(piece.name, moves);
             possibleMoves = [...possibleMoves, ...moves]
         }
         return possibleMoves;
@@ -179,7 +180,13 @@ class Chessboard {
             let previousPiece = this.capturePiece(previousId) || null;
 
             // We'll run a few tests here
-            
+            // const inCheck = this.isInCheck(this.turn);  // If the move results in a check, go back!
+            // if (inCheck) {
+            //     this.blindMove(pieceSelected, oldPos);
+            //     this.setPositionOnBoard(newPos, previousId);
+            //     if (previousPiece) previousPiece.isCaptured = false;
+            //     return;
+            // }
 
             // Now let's actually make the move!
             this.castling(pieceSelected, newPos);
@@ -496,8 +503,16 @@ const setUpClassicGame = () => {
 
 
 // Build Classes for Each Page & Component
+type GameModeSelection = {
+    name: string,
+    description: string,
+    setUp: () => ChessPieceOnPlay[]
+}
+type OpponentSelection = {
+    name: string,
+    setUp: () => void;
+}
 class MainScreen {
-    private gameModeSelectionDiv: HTMLElement | null;
     private gameModes: GameModeSelection[] = [
         {
             name: "Classic",
@@ -638,6 +653,9 @@ class ChessboardHTML extends Chessboard {
     displayDetails() {
         if (this.gameDetailsDiv) this.gameDetailsDiv.remove();
 
+        const detailsContainer = document.createElement("div");
+        detailsContainer.id = "chessboardDetailsContainer";
+
         const details = document.createElement("div");
         details.id = "chessboard-details";
 
@@ -648,9 +666,13 @@ class ChessboardHTML extends Chessboard {
         details.appendChild(turnIndicator);
 
         // Move Log
+        const recentMovesHTML = this.movesLog
+            .map((m, i) => `<li>${i + 1}. ${m}</li>`)
+            .filter((_, i) => i > this.movesLog.length - 6)
+            .join("");
         const moveLog = document.createElement("div");
         moveLog.classList.add("details-block");
-        moveLog.innerHTML = `<strong>Moves:</strong><ul id="move-list">${this.movesLog.map(m => `<li>${m}</li>`).join("")}</ul>`;
+        moveLog.innerHTML = `<strong>Moves:</strong><ul id="move-list">${recentMovesHTML}</ul>`;
         details.appendChild(moveLog);
 
         // Captured Pieces
@@ -665,8 +687,9 @@ class ChessboardHTML extends Chessboard {
 
         // Save Button
 
-        this.gameDetailsDiv = details;
-        this.chessboardContainerDiv.appendChild(details);
+        this.gameDetailsDiv = detailsContainer;
+        this.gameDetailsDiv.appendChild(details);
+        this.chessboardContainerDiv.appendChild(detailsContainer);
     }
 
     updateState() {
@@ -696,15 +719,6 @@ class ChessboardHTML extends Chessboard {
 
 
 // Now let's build the entire App!
-type GameModeSelection = {
-    name: string,
-    description: string,
-    setUp: () => ChessPieceOnPlay[]
-}
-type OpponentSelection = {
-    name: string,
-    setUp: () => void;
-}
 class App {
     constructor() {
         this.displayUI();

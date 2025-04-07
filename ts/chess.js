@@ -90,6 +90,7 @@ var Chessboard = /** @class */ (function () {
         for (var _i = 0, oppPieces_1 = oppPieces; _i < oppPieces_1.length; _i++) {
             var piece = oppPieces_1[_i];
             var moves = piece.getAvailablePositions(this, piece.position);
+            console.log(piece.name, moves);
             possibleMoves = __spreadArray(__spreadArray([], possibleMoves, true), moves, true);
         }
         return possibleMoves;
@@ -155,6 +156,13 @@ var Chessboard = /** @class */ (function () {
             this.blindMove(pieceSelected, newPos);
             var previousPiece = this.capturePiece(previousId) || null;
             // We'll run a few tests here
+            // const inCheck = this.isInCheck(this.turn);  // If the move results in a check, go back!
+            // if (inCheck) {
+            //     this.blindMove(pieceSelected, oldPos);
+            //     this.setPositionOnBoard(newPos, previousId);
+            //     if (previousPiece) previousPiece.isCaptured = false;
+            //     return;
+            // }
             // Now let's actually make the move!
             this.castling(pieceSelected, newPos);
             this.promotion(pieceSelected, newPos);
@@ -436,7 +444,6 @@ var setUpClassicGame = function () {
     }
     return pieceLayout;
 };
-// Build Classes for Each Page & Component
 var MainScreen = /** @class */ (function () {
     function MainScreen() {
         this.gameModes = [
@@ -569,8 +576,11 @@ var ChessboardHTML = /** @class */ (function (_super) {
         }
     };
     ChessboardHTML.prototype.displayDetails = function () {
+        var _this = this;
         if (this.gameDetailsDiv)
             this.gameDetailsDiv.remove();
+        var detailsContainer = document.createElement("div");
+        detailsContainer.id = "chessboardDetailsContainer";
         var details = document.createElement("div");
         details.id = "chessboard-details";
         // Turn Indicator
@@ -579,9 +589,13 @@ var ChessboardHTML = /** @class */ (function (_super) {
         turnIndicator.innerHTML = "<strong>Turn:</strong> <span id=\"turn-color\">".concat(this.turn, "</span>");
         details.appendChild(turnIndicator);
         // Move Log
+        var recentMovesHTML = this.movesLog
+            .map(function (m, i) { return "<li>".concat(i + 1, ". ").concat(m, "</li>"); })
+            .filter(function (_, i) { return i > _this.movesLog.length - 6; })
+            .join("");
         var moveLog = document.createElement("div");
         moveLog.classList.add("details-block");
-        moveLog.innerHTML = "<strong>Moves:</strong><ul id=\"move-list\">".concat(this.movesLog.map(function (m) { return "<li>".concat(m, "</li>"); }).join(""), "</ul>");
+        moveLog.innerHTML = "<strong>Moves:</strong><ul id=\"move-list\">".concat(recentMovesHTML, "</ul>");
         details.appendChild(moveLog);
         // Captured Pieces
         var capturedDiv = document.createElement("div");
@@ -589,8 +603,9 @@ var ChessboardHTML = /** @class */ (function (_super) {
         capturedDiv.innerHTML = "\n            <strong>Captured:</strong>\n            <div class=\"captured-row\"><span>White:</span> ".concat(this.getCapturedHTML("white"), "</div>\n            <div class=\"captured-row\"><span>Black:</span> ").concat(this.getCapturedHTML("black"), "</div>\n        ");
         details.appendChild(capturedDiv);
         // Save Button
-        this.gameDetailsDiv = details;
-        this.chessboardContainerDiv.appendChild(details);
+        this.gameDetailsDiv = detailsContainer;
+        this.gameDetailsDiv.appendChild(details);
+        this.chessboardContainerDiv.appendChild(detailsContainer);
     };
     ChessboardHTML.prototype.updateState = function () {
         this.displayBoard();
@@ -615,6 +630,7 @@ var ChessboardHTML = /** @class */ (function (_super) {
     };
     return ChessboardHTML;
 }(Chessboard));
+// Now let's build the entire App!
 var App = /** @class */ (function () {
     function App() {
         this.displayUI();
